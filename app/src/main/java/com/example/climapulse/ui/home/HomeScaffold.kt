@@ -28,7 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,7 +44,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.climapulse.FeatureFlags
 import com.example.climapulse.data.Metric
+import com.example.climapulse.ui.permissions.PermissionsSheet
 import com.example.climapulse.ui.components.AppSnackbarHost
 import com.example.climapulse.ui.components.CollectMessages
 import com.example.climapulse.ui.components.OfflineBanner
@@ -90,14 +95,28 @@ fun HomeScaffold(
     val backStackEntry by tabNavController.currentBackStackEntryAsState()
     val onDashboard = backStackEntry?.destination?.hasRoute(DashboardTab::class) == true
     val tour = remember { TourController() }
+    // Secuencia de bienvenida de este ingreso: permisos → tour → listo.
+    // rememberSaveable: no se repite al girar, pero sí en cada nuevo ingreso (login o abrir la app).
+    var introPhase by rememberSaveable {
+        mutableStateOf(if (FeatureFlags.ALWAYS_SHOW_INTRO) IntroPhase.Permissions else IntroPhase.Tour)
+    }
     CollectMessages(viewModel.messages)
 
-    // El tour se lanza la primera vez que el Inicio termina de cargar (o al pedirlo desde Perfil).
-    LaunchedEffect(tourDone, dashboardReady, onDashboard) {
-        if (!tourDone && dashboardReady && onDashboard && !tour.isActive) {
+    // El tour se lanza cuando el Inicio terminó de cargar: en cada ingreso (modo demo),
+    // la primera vez (modo final) o al pedirlo desde Perfil.
+    LaunchedEffect(introPhase, tourDone, dashboardReady, onDashboard) {
+        val shouldTour = introPhase == IntroPhase.Tour && (FeatureFlags.ALWAYS_SHOW_INTRO || !tourDone)
+        if (shouldTour && dashboardReady && onDashboard && !tour.isActive) {
             delay(600) // deja que la pantalla termine de dibujarse
             tour.start(homeTourSteps)
         }
+    }
+
+    if (introPhase == IntroPhase.Permissions && onDashboard) {
+        PermissionsSheet(
+            onNotificationsResult = viewModel::onNotificationPermission,
+            onDone = { introPhase = IntroPhase.Tour }
+        )
     }
 
     CompositionLocalProvider(LocalTour provides tour) {
@@ -138,6 +157,7 @@ fun HomeScaffold(
                                 onOpenTerms = onOpenTerms,
                                 onLoggedOut = onLoggedOut,
                                 onReplayTour = {
+                                    introPhase = IntroPhase.Tour
                                     viewModel.replayTour()
                                     tabNavController.navigateToTab(DashboardTab)
                                 }
@@ -147,10 +167,18 @@ fun HomeScaffold(
                 }
             }
             // Capa del tour por encima de todo, incluida la barra inferior.
-            TourOverlay(controller = tour, onFinished = viewModel::finishTour)
+            TourOverlay(
+                controller = tour,
+                onFinished = {
+                    viewModel.finishTour()
+                    introPhase = IntroPhase.Done
+                }
+            )
         }
     }
 }
+
+private enum class IntroPhase { Permissions, Tour, Done }
 
 private fun NavHostController.navigateToTab(route: Any) {
     navigate(route) {

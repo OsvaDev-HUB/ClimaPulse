@@ -98,6 +98,10 @@ class HomeViewModel(
     fun refresh(successMessage: String = "Lecturas actualizadas") =
         load(showSkeleton = false, announce = true, successMessage = successMessage)
 
+    fun onNotificationPermission(granted: Boolean) {
+        viewModelScope.launch { session.setNotificationsEnabled(granted) }
+    }
+
     fun finishTour() {
         viewModelScope.launch { session.setTourDone(true) }
     }

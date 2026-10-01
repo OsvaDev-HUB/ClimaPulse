@@ -35,5 +35,7 @@ App Android para observar temperatura, humedad y luz. Kotlin, Jetpack Compose y 
 
 ## Notas
 
+- **Modo demo activo**: `FeatureFlags.ALWAYS_SHOW_INTRO = true` hace que en *cada* ingreso al Home (iniciar sesión o abrir la app con sesión activa) aparezcan la ventana de permisos (`ui/permissions/PermissionsSheet.kt`) y luego el tour. Cambiarlo a `false` vuelve al comportamiento final: el tour una sola vez.
+
 - El backend es **simulado**: el login acepta cualquier correo válido con contraseña de 6+ caracteres; Google/Apple simulan el SSO (no hay Firebase ni Credential Manager configurados).
 - Las lecturas son de demostración (`USE_DEMO_DATA` en `data/EnvironmentRepository.kt`). En el emulador, apaga wifi/datos para ver el estado sin conexión.
